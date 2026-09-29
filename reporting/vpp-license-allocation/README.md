@@ -2,6 +2,8 @@
 
 A PowerShell script that checks your Workspace ONE UEM tenant for Apple VPP (Volume Purchase Program) apps and tells you which ones are running low on allocatable licenses — either app-wide, or within a specific smart-group assignment (the thing that actually determines whether a given device gets the app).
 
+> Not created, reviewed, or endorsed by Omnissa. Run at your own risk — review the script and test in a non-production tenant first. See the [repo-root README](../../README.md) for the full disclaimer.
+
 Part of the `ws1-uem-scripts` repo — see the [repo-root README](../../README.md) for naming/folder conventions and how this script relates to others. For technical/design background on this script specifically (why it's built this way, what's confirmed vs. assumed about the API), see `DESIGN.md`. This file is just "how do I run it."
 
 ## What you need before running it
@@ -145,5 +147,5 @@ Reading this: Web and Boxer are flagged — both have a smart-group assignment d
 - `Get-VppLicenseAllocation.ps1` — the script.
 - `README.md` — this file.
 - `DESIGN.md` — technical/design notes for whoever maintains this next.
-- `sample-output/` — a few real `VppAllocationReport_*.json` runs kept for reference (not something you need to touch; new runs land wherever you point `-OutputPath`, or the current folder by default, and are git-ignored — see the repo-root `.gitignore`).
+- `sample-output/` — local scratch space if you want somewhere to point `-OutputPath` while testing; it's git-ignored entirely (see the repo-root `.gitignore`) since report contents include real tenant data (app names, license counts, org name) that shouldn't be committed.
 - `../../shared/Ws1ApiCore.psm1` — the OAuth/field-resolution helpers this script imports; shared with other scripts in the repo.

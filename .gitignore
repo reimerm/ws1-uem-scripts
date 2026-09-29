@@ -1,11 +1,12 @@
 # Generated reports (JSON/XML) — written wherever a script's -OutputPath points,
-# or its own folder by default. Curated examples live in a script's own
-# sample-output/ folder, which is explicitly un-ignored below.
+# or its own folder by default. Never committed: these contain real tenant data
+# (app names, license counts, org names). sample-output/ folders are for local
+# scratch use only, not a place to check examples into git.
 VppAllocationReport_*.json
 VppAllocationReport_*.xml
 *Report_[0-9]*.json
 *Report_[0-9]*.xml
-!**/sample-output/**
+**/sample-output/
 
 # OS/editor cruft
 .DS_Store

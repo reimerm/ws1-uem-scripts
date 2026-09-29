@@ -1,5 +1,7 @@
 # ws1-uem-scripts
 
+> **Disclaimer:** This is an independent, community project — it is **not created, reviewed, or endorsed by Omnissa**, and is not an official Omnissa product or support offering. Endpoints, fields, and behaviors described here were confirmed against a specific tenant and UEM release at a point in time (see each script's `DESIGN.md` and `docs/api-notes.md`) and may not hold for your environment or a future release. **Review and test every script yourself, in a non-production environment first, before running it against a production tenant.** Use is entirely at your own risk; no warranty of any kind is provided.
+
 PowerShell scripts against the Workspace ONE UEM REST API. Each script solves one job end to end (query + report, or a single remediation action) and ships with its own `README.md` (how to run it) and `DESIGN.md` (why it's built this way, what's confirmed vs. assumed about the API). Shared plumbing — OAuth token acquisition, auth headers, tolerant field resolution — lives once in `shared/` rather than being copy-pasted into every script.
 
 ## Folder structure
@@ -17,8 +19,7 @@ ws1-uem-scripts/
 │   └── vpp-license-allocation/
 │       ├── Get-VppLicenseAllocation.ps1
 │       ├── README.md
-│       ├── DESIGN.md
-│       └── sample-output/
+│       └── DESIGN.md
 ├── remediation/                 <- makes changes: fixes, cleans up, or corrects tenant state
 ├── automation/                  <- scheduled/triggered workflows, not a one-off report or fix
 └── diagnostics/                 <- inspects/dumps raw API data for troubleshooting, no report produced

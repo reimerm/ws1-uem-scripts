@@ -64,6 +64,6 @@ Only add genuinely cross-script-reusable logic to the shared module itself. Anyt
 - [ ] Comment-based help block present and accurate.
 - [ ] Every endpoint/field/param the script depends on is either confirmed (say how — Bruno collection, live tenant dump, etc.) or explicitly flagged as unconfirmed/speculative.
 - [ ] No secrets (client secrets, tokens, real tenant hostnames) committed — use placeholders in examples and docs.
-- [ ] Generated output files (reports, dumps) are covered by `.gitignore`, or explicitly intended as a committed sample and placed under a `sample-output/` folder with any sensitive values redacted.
+- [ ] Generated output files (reports, dumps) are covered by `.gitignore` — real tenant data (app names, license counts, org identifiers) is never committed. If a sample is genuinely useful in docs, hand-write a small redacted/synthetic snippet directly in the README instead of committing a real report file.
 - [ ] If you added or changed something in `shared/Ws1ApiCore.psm1`, checked for other scripts that import it and confirmed you haven't broken them.
 - [ ] If you learned something about the API worth remembering beyond this one script, added it to `docs/api-notes.md`.
