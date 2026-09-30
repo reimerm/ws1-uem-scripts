@@ -162,6 +162,17 @@
     A pre-acquired OAuth bearer token. If supplied, ClientId/ClientSecret/
     OAuthTokenUrl are ignored and this token is used directly.
 
+.PARAMETER Credential
+    Basic-auth mode (alternative to OAuth). A PSCredential for a UEM admin account
+    allowed to use the REST API (create with Get-Credential). Must be used together
+    with -TenantCode. One of the three authentication modes is required: OAuth
+    (-OAuthTokenUrl/-ClientId/-ClientSecret), -AccessToken, or -Credential/-TenantCode.
+
+.PARAMETER TenantCode
+    Basic-auth mode. The tenant API key sent in the aw-tenant-code header (Groups &
+    Settings > All Settings > System > Advanced > API > REST API). Not needed and
+    never sent for OAuth. Treat as a secret.
+
 .PARAMETER LocationGroupId
     Optional. Numeric Location Group / Organization Group id to scope the search
     to (query param `locationgroupid`, confirmed in the collection).
@@ -257,6 +268,12 @@
 
 .EXAMPLE
     .\Get-VppLicenseAllocation.ps1 -ApiUrl as137.awmdm.com -AccessToken $token -DumpRawSample
+
+.EXAMPLE
+    # Basic auth + aw-tenant-code instead of OAuth
+    $cred = Get-Credential
+    .\Get-VppLicenseAllocation.ps1 -ApiUrl as137.awmdm.com -Credential $cred `
+        -TenantCode $env:WS1_TENANT_CODE -LowAllocationThreshold 10
 #>
 
 [CmdletBinding(DefaultParameterSetName = 'ClientCredentials')]
@@ -275,6 +292,12 @@ param(
 
     [Parameter(Mandatory = $true, ParameterSetName = 'PreAcquiredToken')]
     [string]$AccessToken,
+
+    [Parameter(Mandatory = $true, ParameterSetName = 'BasicAuth')]
+    [System.Management.Automation.PSCredential]$Credential,
+
+    [Parameter(Mandatory = $true, ParameterSetName = 'BasicAuth')]
+    [string]$TenantCode,
 
     [Parameter(Mandatory = $false)]
     [int]$LocationGroupId,
@@ -323,7 +346,7 @@ $ErrorActionPreference = 'Stop'
 $BaseApiUrl = "https://$ApiUrl/api"
 
 # Shared OAuth/field-resolution helpers (Get-AccessTokenViaClientCredentials,
-# Get-AuthHeaders, Resolve-Field) live in the repo's shared module so other
+# New-Ws1AuthContext, Get-Ws1AuthHeaders, Resolve-Field) live in the repo's shared module so other
 # WS1 scripts can reuse them without copy-pasting. See shared/Ws1ApiCore.psm1.
 Import-Module (Join-Path $PSScriptRoot '..\..\shared\Ws1ApiCore.psm1') -Force
 
@@ -541,9 +564,9 @@ function Get-PurchasedAppByUuidV2 {
         field, see $FieldMap comment above) and a "uuid"/"name"/"identifier" top
         level plus an "assignments" array keyed by smart_group_uuid.
     #>
-    param([string]$Base, [string]$Token, [string]$Uuid)
+    param([string]$Base, $AuthContext, [string]$Uuid)
 
-    $v2Headers = Get-AuthHeaders -Token $Token -Version 2
+    $v2Headers = Get-Ws1AuthHeaders -Context $AuthContext -Version 2
     $uri = "$Base/mam/apps/purchased/$Uuid"
     try {
         return Invoke-RestMethod -Method Get -Uri $uri -Headers $v2Headers
@@ -558,14 +581,16 @@ function Get-PurchasedAppByUuidV2 {
 # Main
 # ---------------------------------------------------------------------------
 
-if ($PSCmdlet.ParameterSetName -eq 'ClientCredentials') {
-    $token = Get-AccessTokenViaClientCredentials -TokenUrl $OAuthTokenUrl -Id $ClientId -Secret $ClientSecret
+# Authentication: exactly one of three modes is required (enforced by the parameter
+# sets). Basic auth = admin Credential + aw-tenant-code; OAuth never sends the tenant code.
+switch ($PSCmdlet.ParameterSetName) {
+    'ClientCredentials' { $auth = New-Ws1AuthContext -Mode OAuth -TokenUrl $OAuthTokenUrl -ClientId $ClientId -ClientSecret $ClientSecret }
+    'PreAcquiredToken'  { $auth = New-Ws1AuthContext -Mode Token -AccessToken $AccessToken }
+    'BasicAuth'         { $auth = New-Ws1AuthContext -Mode Basic -Credential $Credential -TenantCode $TenantCode }
 }
-else {
-    $token = $AccessToken
-}
+Write-Verbose "Auth mode: $($auth.Mode)"
 
-$headers = Get-AuthHeaders -Token $token
+$headers = Get-Ws1AuthHeaders -Context $auth -Version 1
 
 Write-Verbose "Querying purchased VPP apps for platform '$Platform' from $BaseApiUrl"
 $rawApps = Get-AllPurchasedVppApps -Base $BaseApiUrl -Headers $headers -PlatformFilter $Platform `
@@ -599,7 +624,7 @@ if ($InspectApplicationId -and $InspectApplicationId.Count -gt 0) {
         $uuid = Resolve-Field -Object $match -Names $FieldMap.AppUuid
         if ($uuid) {
             Write-Host "`n--- V2 lookup: GET /mam/apps/purchased/$uuid (version=2) ---`n" -ForegroundColor Yellow
-            $detailV2 = Get-PurchasedAppByUuidV2 -Base $BaseApiUrl -Token $token -Uuid $uuid
+            $detailV2 = Get-PurchasedAppByUuidV2 -Base $BaseApiUrl -AuthContext $auth -Uuid $uuid
             if ($detailV2) { $detailV2 | ConvertTo-Json -Depth 8 }
         }
         else {
@@ -665,7 +690,7 @@ $reportItems = foreach ($app in $rawApps) {
         # (ExternallyRedeemed). See DESIGN.md for the full V1-vs-V2 writeup.
         $uuidForDetail = Resolve-Field -Object $app -Names $FieldMap.AppUuid
         if ($uuidForDetail) {
-            $rawDetailRecord = Get-PurchasedAppByUuidV2 -Base $BaseApiUrl -Token $token -Uuid $uuidForDetail
+            $rawDetailRecord = Get-PurchasedAppByUuidV2 -Base $BaseApiUrl -AuthContext $auth -Uuid $uuidForDetail
             $rawDetailSource = 'V2'
         }
         if (-not $rawDetailRecord -and $appId) {

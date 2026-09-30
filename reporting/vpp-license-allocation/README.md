@@ -11,6 +11,8 @@ Part of the `ws1-uem-scripts` repo — see the [repo-root README](../../README.m
 - Your Workspace ONE UEM REST API host name (e.g. `as137.awmdm.com`) — found in the console under **Groups & Settings > All Settings > System > Advanced > API > REST API**, at the Customer OG or below.
 - An OAuth 2.0 client with permission to read purchased/VPP app data, set up under **Groups & Settings > Configurations > OAuth Client Management**. You'll need the client ID, client secret, and your datacenter's OAuth token URL (see Omnissa's "Datacenter and Token URLs for OAuth 2.0 Support" documentation).
   - Alternatively, if you already have a valid bearer token from somewhere else, you can pass that directly instead.
+  - **Or Basic auth + tenant code** (legacy, also works where OAuth isn't available): a UEM admin account allowed to use the REST API, plus the tenant API key (`aw-tenant-code`) from the same REST API settings page. Pass `-Credential (Get-Credential) -TenantCode <key>` instead of the OAuth parameters. OAuth does not need the tenant code.
+- One authentication mode is required: OAuth, `-AccessToken`, or `-Credential`/`-TenantCode`.
 - PowerShell 5.1+ (Windows PowerShell or PowerShell 7+, either works).
 
 ## Basic usage
@@ -42,6 +44,16 @@ If you already have a bearer token, use `-AccessToken` instead of the three OAut
 ```powershell
 .\Get-VppLicenseAllocation.ps1 -ApiUrl as137.awmdm.com -AccessToken $token -LowAllocationThreshold 5
 ```
+
+With Basic auth + `aw-tenant-code`:
+
+```powershell
+$cred = Get-Credential
+.\Get-VppLicenseAllocation.ps1 -ApiUrl as137.awmdm.com -Credential $cred `
+    -TenantCode $env:WS1_TENANT_CODE -LowAllocationThreshold 5
+```
+
+Basic auth support was added 2026-09-30 and is untested against a tenant. Try `-DumpRawSample` first. A 401 with Basic auth usually means a wrong password or tenant code; stop and fix it rather than retrying, to avoid locking the admin account.
 
 ## Common tasks
 

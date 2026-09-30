@@ -84,6 +84,10 @@ The search response's `Platform` field is a small integer (observed: `2`), not t
 
 **If this is ever worth resurrecting:** it would need a VPP app whose search record returns a `Platform` value other than `2` to diff against, or a different field entirely (e.g. `SupportedModels`, not observed in any sample so far since it's not returned by default) that might carry real OS targeting. Absent that, don't re-add a `PlatformMap`/friendly-name column — it was tried and added no signal.
 
+## Authentication modes
+
+Three modes via parameter sets, all built through the shared `New-Ws1AuthContext` / `Get-Ws1AuthHeaders` (`shared/Ws1ApiCore.psm1`): OAuth client_credentials (default set), pre-acquired `-AccessToken`, and Basic (`-Credential` + `-TenantCode` -> `Authorization: Basic` + `aw-tenant-code`). Basic follows the UEM API Help "Getting Started" page and the `securityDefinitions` in the published specs; it has not been run against a tenant for this script. OAuth and token modes never send `aw-tenant-code` (not required for OAuth). Version `Accept` headers (V1 for search/detail, V2 for the purchased-app lookup) are set per call by `Get-Ws1AuthHeaders -Version`. This script does not yet use the shared rate limiter / retry (`Invoke-Ws1Request`); it still calls `Invoke-RestMethod` directly, so the "no retry/backoff" limitation below still applies.
+
 ## Extension points / where to look first
 
 - **All response field names live in `$FieldMap`** (dotted-path candidate lists, tried in order). If Omnissa changes the schema in a future release, re-run `-DumpRawSample` and/or `-InspectApplicationId`, diff against the confirmed values documented in the script header, and update `$FieldMap` — nothing else in the script needs to change for a pure field-rename.

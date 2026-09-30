@@ -47,6 +47,18 @@ Every script should have a standard PowerShell comment-based help block so `Get-
 #>
 ```
 
+## Authentication (required for every script)
+
+Every script must let the user choose between **OAuth** and **Basic auth + `aw-tenant-code`**, plus optionally a pre-acquired token. One mode is mandatory. Do this with parameter sets and the shared module, not by hand:
+
+| Mode | Parameters | Shared call |
+|---|---|---|
+| OAuth (default set `ClientCredentials`) | `-OAuthTokenUrl -ClientId -ClientSecret` | `New-Ws1AuthContext -Mode OAuth ...` |
+| Pre-acquired token (`PreAcquiredToken`) | `-AccessToken` | `New-Ws1AuthContext -Mode Token ...` |
+| Basic (`BasicAuth`) | `-Credential` (PSCredential) `-TenantCode` | `New-Ws1AuthContext -Mode Basic ...` |
+
+Then build headers per request with `Get-Ws1AuthHeaders -Context $auth -Version N`. `aw-tenant-code` is sent for Basic only; OAuth does not need it. Never retry a 401 under Basic auth (account lockout risk). Reference implementations, both on this shared code path with identical parameter sets: `reporting/vpp-license-allocation/` and `remediation/smartgroup-device-commands/`. Copy their auth block rather than writing your own.
+
 ## Using the shared module
 
 If your script needs OAuth token acquisition, standard auth headers, or tolerant field resolution, use `shared/Ws1ApiCore.psm1` rather than re-implementing it:
@@ -57,13 +69,19 @@ Import-Module (Join-Path $PSScriptRoot '..\..\shared\Ws1ApiCore.psm1') -Force
 
 Only add genuinely cross-script-reusable logic to the shared module itself. Anything specific to one endpoint's response shape or pagination behavior belongs in the script.
 
+## Offline tests
+
+`tests/mock-uem/` holds a small HTTPS mock of the UEM endpoints these scripts use plus a PowerShell test suite (`PWSH=/path/to/pwsh ./tests/mock-uem/run_tests.sh`; needs python3, openssl, PowerShell 7+). It checks auth headers (OAuth vs Basic + `aw-tenant-code`), batching, retry/abort behaviour and quota handling. The mock is **not** real UEM: 429/503 codes and `x-ratelimit-*` headers are scripted, so a pass proves the code follows its design, not that a tenant behaves that way. Run it after touching `shared/Ws1ApiCore.psm1` or either script's auth/request logic. Test credentials in there are fake.
+
 ## PR checklist
 
 - [ ] Script lives in the right category folder, named per the conventions above.
+- [ ] Offers OAuth and Basic + `aw-tenant-code` authentication (one mandatory), per "Authentication" above.
 - [ ] `README.md` and `DESIGN.md` both present and filled in (not just copied from another script and left unedited).
 - [ ] Comment-based help block present and accurate.
 - [ ] Every endpoint/field/param the script depends on is either confirmed (say how — Bruno collection, live tenant dump, etc.) or explicitly flagged as unconfirmed/speculative.
 - [ ] No secrets (client secrets, tokens, real tenant hostnames) committed — use placeholders in examples and docs.
 - [ ] Generated output files (reports, dumps) are covered by `.gitignore` — real tenant data (app names, license counts, org identifiers) is never committed. If a sample is genuinely useful in docs, hand-write a small redacted/synthetic snippet directly in the README instead of committing a real report file.
 - [ ] If you added or changed something in `shared/Ws1ApiCore.psm1`, checked for other scripts that import it and confirmed you haven't broken them.
+- [ ] `tests/mock-uem/run_tests.sh` passes (if you changed shared auth/request code or a script that uses it).
 - [ ] If you learned something about the API worth remembering beyond this one script, added it to `docs/api-notes.md`.
