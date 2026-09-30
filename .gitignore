@@ -8,6 +8,20 @@ VppAllocationReport_*.xml
 *Report_[0-9]*.xml
 **/sample-output/
 
+# Smart-group command runs: per-device results and resume state (device IDs, tenant data)
+SmartGroupCommand_*.csv
+SmartGroupCommand_*.json
+smartgroup-state_*.json
+
+# Local clone of euc-dev/ws1-uem-apis used for spec research (not part of this repo)
+_specs/
+
+# Local PowerShell runtime for testing (not part of this repo)
+_tools/
+
+# Notes for the AI assistant that helps maintain this repo (local only)
+CLAUDE.md
+
 # OS/editor cruft
 .DS_Store
 Thumbs.db

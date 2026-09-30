@@ -1,6 +1,6 @@
 # ws1-uem-scripts
 
-> **Disclaimer:** This is an independent, community project — it is **not created, reviewed, or endorsed by Omnissa**, and is not an official Omnissa product or support offering. Endpoints, fields, and behaviors described here were confirmed against a specific tenant and UEM release at a point in time (see each script's `DESIGN.md` and `docs/api-notes.md`) and may not hold for your environment or a future release. **Review and test every script yourself, in a non-production environment first, before running it against a production tenant.** Use is entirely at your own risk; no warranty of any kind is provided.
+> **Disclaimer:** This is an independent, community project — it is **not created, reviewed, or endorsed by Omnissa**, and is not an official Omnissa product or support offering. Endpoints, fields, and behaviors described here were confirmed against a specific tenant and UEM release at a point in time (see each script's `DESIGN.md` and `docs/api-notes.md`) and may not hold for your environment or a future release. **Review and test every script yourself, in a non-production environment first, before running it against a production tenant.** Use is entirely at your own risk; no warranty of any kind is provided. Released under the [MIT License](LICENSE) (provided "AS IS", without warranty). Some scripts can send destructive device commands (for example wipes); those are guarded by extra switches and typed confirmations, but you remain solely responsible for what you run.
 
 PowerShell scripts against the Workspace ONE UEM REST API. Each script solves one job end to end (query + report, or a single remediation action) and ships with its own `README.md` (how to run it) and `DESIGN.md` (why it's built this way, what's confirmed vs. assumed about the API). Shared plumbing — OAuth token acquisition, auth headers, tolerant field resolution — lives once in `shared/` rather than being copy-pasted into every script.
 
@@ -14,13 +14,17 @@ ws1-uem-scripts/
 ├── docs/
 │   └── api-notes.md           <- cross-script API findings (auth quirks, schema gaps, endpoint gotchas)
 ├── shared/
-│   └── Ws1ApiCore.psm1        <- Get-AccessTokenViaClientCredentials, Get-AuthHeaders, Resolve-Field
+│   └── Ws1ApiCore.psm1        <- Get-AccessTokenViaClientCredentials, Get-AuthHeaders, Resolve-Field, New-Ws1RateLimiter, Invoke-Ws1Request
 ├── reporting/                  <- read-only: query the API, produce a report, no changes made to the tenant
 │   └── vpp-license-allocation/
 │       ├── Get-VppLicenseAllocation.ps1
 │       ├── README.md
 │       └── DESIGN.md
 ├── remediation/                 <- makes changes: fixes, cleans up, or corrects tenant state
+│   └── smartgroup-device-commands/
+│       ├── Invoke-SmartGroupDeviceCommand.ps1
+│       ├── README.md
+│       └── DESIGN.md
 ├── automation/                  <- scheduled/triggered workflows, not a one-off report or fix
 └── diagnostics/                 <- inspects/dumps raw API data for troubleshooting, no report produced
 ```
@@ -54,8 +58,10 @@ Splitting these keeps the usage doc short and scannable while still capturing th
 `shared/Ws1ApiCore.psm1` holds the OAuth/field-resolution helpers common to any script hitting the WS1 UEM REST API:
 
 - `Get-AccessTokenViaClientCredentials` — OAuth 2.0 client_credentials token request (client id/secret via HTTP Basic auth header, per the official Bruno collection — not body fields).
+- `New-Ws1AuthContext` / `Get-Ws1AuthHeaders` / `Update-Ws1AuthToken` — the one way scripts authenticate: OAuth, pre-acquired token, or Basic + `aw-tenant-code` (`Get-BasicAuthHeaders`). Every script must offer OAuth and Basic; see `CONTRIBUTING.md`.
 - `Get-AuthHeaders` — standard bearer-token header set, with a `-Version` switch for the API's versioned `Accept` header.
 - `Resolve-Field` — tolerant, dotted-path property resolver for WS1's inconsistent PascalCase/snake_case/`{Value=X}`-wrapped JSON shapes.
+- `New-Ws1RateLimiter` / `Invoke-Ws1Request` — paced HTTP calls with `Retry-After`-aware retry on 429/503, exponential backoff with jitter, and adaptive slowdown. Never throws on HTTP errors; returns a result object.
 
 Import it from a script with a `$PSScriptRoot`-relative path, e.g. from `reporting/<script-folder>/`:
 

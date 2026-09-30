@@ -5,7 +5,7 @@ Findings about the API itself (not specific to any one script) confirmed while b
 ## Auth
 
 - **OAuth 2.0, `client_credentials` grant.** Client id/secret are sent as an HTTP Basic `Authorization` header on the token request — **not** as `client_id`/`client_secret` fields in the request body. Confirmed via the official Bruno collection's collection-level auth config (`auth:oauth2`, `credentials_placement: basic_auth_header`). Only `grant_type=client_credentials` goes in the body.
-- No `aw-tenant-code` / legacy API-key header is used anywhere in the validated Bruno collection — OAuth bearer token only.
+- No `aw-tenant-code` / legacy API-key header is used anywhere in the validated Bruno collection — OAuth bearer token only. The OpenAPI specs (2410-2607) do still declare the legacy schemes in `securityDefinitions`: `BasicAuth`, `ApiKeyAuth` (header `aw-tenant-code`), `GroupIdAuth` (`aw-groupid`), `CmsAuth`; almost every operation lists them. Omnissa's REST API console page documents only OAuth; the tenant's own API Help "Getting Started" page documents Basic + `aw-tenant-code` (see below). The Basic mode in `remediation/smartgroup-device-commands` follows it and is unverified against a tenant.
 - Base URL shape: `https://<YourApiServer>/api` — lowercase `api`, confirmed via the Bruno collection's `basePath`/pre-request variables.
 
 ## Query params (MAM Purchased Apps search)
@@ -42,6 +42,21 @@ A VPP app's purchased licenses are handed out through smart-group assignments, e
 ## PowerShell gotcha: `Measure-Object -Minimum`/`-Maximum` return `[double]`
 
 Even over integer input, `(...| Measure-Object -Minimum).Minimum` comes back as a `[double]` — left uncast, this prints as `2.000` instead of `2` in both `Format-Table` and `ConvertTo-Json`. Cast explicitly: `[int]((...| Measure-Object -Minimum).Minimum)`.
+
+## Smart groups, device commands and rate limits (spec review 2410-2607, 2026-09-30)
+
+Spec-derived, not yet live-verified. Details and version diff in `remediation/smartgroup-device-commands/DESIGN.md`.
+
+- Smart group objects carry both `SmartGroupID` (int) and `SmartGroupUuid` on every release. `GET /mdm/smartgroups/{id}` takes the numeric ID only; UUID lookup means paging `GET /mdm/smartgroups/search` and matching.
+- `GET /mdm/smartgroups/{smartgroupid}/devices` returns `Devices[]` with `Id` (string), `Name`, `Model`, `OSVersion`, `Username`, `Platform` (string), `Ownership`. No paging params documented.
+- `POST /mdm/devices/{deviceid}/commands?command=` (V1) is the only route covering DeviceQuery and SyncDevice, identical on 2410-2607. V1 bulk (`/devices/commands/bulk`) covers EnterpriseWipe, LockDevice, ScheduleOsUpdate, SoftReset, Shutdown by serial/UDID/MAC/IMEI. V2 bulk (`/devices/commands/{commandName}`) covers Lock, DeviceWipe, SyncSensors by device UUID.
+- 2607 adds `version` on smart group search (-1 all, 1 classic, 2 SGv2) and the V4 API `/mdm/smart-groups/{uuid}` (Accept `version=4`), which returns rules with no device list.
+- Platform enum (`DeviceTypeEnum`): Apple, AppleOsX, AppleTv, AppleVision, Android, WindowsPc, WinRT, ChromeOS, ChromeBook, Linux, and others. Whether member lists return exactly these labels is unconfirmed.
+- Rate limits (UEM API Help > Getting Started > API Rate Limits): applied per Organization Group by API key. *Server Throttling* = per-minute limit, *Daily Quota* = per-24 h limit; keys on the same OG aggregate. Response headers `x-ratelimit-limit`, `x-ratelimit-remaining`, `x-ratelimit-reset` (epoch) describe the daily quota only. The per-minute value and the throttle status code are not documented; specs show HTTP 429 on some System/MAM operations only, none on MDM. Treat 429/503 as throttling, honour `Retry-After`, and watch the quota headers.
+- **Observed vs documented:** the Help page documents `x-ratelimit-*` as the 24-hour quota (example 50000), but a live tenant returned ~5000 that looks like a short (about 5 minute) window per the user. Window length unmeasured. Do not hard-code 24 h; use `x-ratelimit-reset`.
+- Auth per the same page: OAuth (recommended), Basic (Base64 `user:pass`), or certificate auth in `Authorization`; the `aw-tenant-code` API key header goes with Basic. OAuth does not need it. No `Accept` header means XML.
+- **Live test (2604, 2026-09-30, OAuth, SyncDevice on 3 Apple devices):** confirmed smart group lookup by numeric ID; member list `Platform` values `Apple`, `AppleOsX`, `Android`, `Linux`, `WinRT` match the enum labels; per-device V1 command route returned HTTP 202 for the canary and the batch; `x-ratelimit-*` headers present (limit 5000, 5 requests consumed 5, reset about 1 min out at that moment). UUID lookup, Basic auth, 429/503 behaviour and other platforms are still untested on a live tenant.
+- Fetching large spec files through a web fetch tool truncates at ~100k characters. Clone `euc-dev/ws1-uem-apis` locally to analyze them.
 
 ## Platform field — not useful for Apple sub-platform detection
 
